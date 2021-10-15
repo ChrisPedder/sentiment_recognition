@@ -1,0 +1,7 @@
+pandas
+tensorflow
+transformers
+gensim
+nltk
+sklearn
+emoji
