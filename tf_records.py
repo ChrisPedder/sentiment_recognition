@@ -30,12 +30,12 @@ class TFRecordsWriter(object):
         self.SEED = 42
         self.args = args
         self.batch_size = args.batch_size
-        self.predictor = BERTVectorizer(args.max_length)
+        self.predictor = BERTVectorizer(args.max_length, args.bert_model_type)
         self.datasets = self.get_tf_datasets()
 
         self.tfrecords_foldername = os.path.join(
             './data',
-            args.dataset + '_bert_tfrecords')
+            args.dataset + '_' + args.bert_model_type + '_tfrecords')
         if not os.path.isdir(self.tfrecords_foldername):
             os.mkdir(self.tfrecords_foldername)
 
@@ -64,7 +64,7 @@ class TFRecordsWriter(object):
             try:
                 batch = next(dataset)
                 print(f'Converting batch {i} to TFRecords')
-                features, labels = self.predictor.vectorize(batch)
+                features, labels = self.predictor.vectorize_batch(batch)
 
                 for embedding, label in zip(features, labels):
 
@@ -97,7 +97,7 @@ class TFRecordsReader(object):
         self.batch_size = args.batch_size
         self.tfrecords_foldername = os.path.join(
             './data',
-            args.dataset + '_bert_tfrecords')
+            args.dataset + '_' + args.bert_model_type + '_tfrecords')
         self.datasets = self.read_from_tf_records()
 
     def read_from_tf_records(self):
@@ -137,6 +137,9 @@ def parse_args():
                         choices=['sentiments', 'emotions'])
     parser.add_argument('--max_length', help='Path to the data files',
                         type=int, default=50)
+    parser.add_argument('--bert_model_type', help='Which bert model to use '
+                        'in the vectorization routine.',
+                        type=str, default='bert')
     args = parser.parse_args()
     return args
 

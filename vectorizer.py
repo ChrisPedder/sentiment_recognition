@@ -5,7 +5,9 @@ import numpy as np
 from typing import List
 
 import tensorflow as tf
-from transformers import BertTokenizer, TFBertModel, TFAutoModel, AutoTokenizer
+from transformers import (BertTokenizer, TFBertModel,
+                          TFAutoModel, AutoTokenizer,
+                          DistilBertTokenizer, TFDistilBertModel)
 
 from cleaning import LogisticPipeline, TransformerPipeline
 
@@ -76,6 +78,18 @@ class BoWVectorizer:
         return output, labels
 
 
+BERT_MODEL_PARAMS = {
+    'bertweet': {'path': 'vinai/bertweet-base',
+                 'tokenizer': AutoTokenizer,
+                 'model': TFAutoModel},
+    'distilbert': {'path': 'distilbert-base-cased',
+                   'tokenizer': DistilBertTokenizer,
+                   'model': TFDistilBertModel},
+    'bert': {'path': 'bert-base-cased',
+             'tokenizer': BertTokenizer,
+             'model': TFBertModel},
+}
+
 class BERTVectorizer(object):
 
     """
@@ -85,37 +99,87 @@ class BERTVectorizer(object):
     Note that I only return this CLS-embedding and then feed straight to our
     classification layer.
     """
-    def __init__(self, max_length, bert_model_type="vinai/bertweet-base"):
+    def __init__(self, max_length, bert_model_type='bertweet'):
         self.max_length = max_length
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            bert_model_type, use_fast=False)
-        self.model = TFAutoModel.from_pretrained(bert_model_type)
+        self.bert_model_type = bert_model_type
+        self.tokenizer = BERT_MODEL_PARAMS[
+            bert_model_type]['tokenizer'].from_pretrained(
+                 BERT_MODEL_PARAMS[bert_model_type]['path'], use_fast=False
+        )
+        self.model = BERT_MODEL_PARAMS[
+            bert_model_type]['model'].from_pretrained(
+                BERT_MODEL_PARAMS[bert_model_type]['path']
+        )
+
         self.cleaning_pipeline = TransformerPipeline
         self.dict_size = 768
 
-    def _prepare_batch(self, batch):
+    def _clean_text(self, text_list):
+        if not isinstance(text_list, list):
+            text_list = [text_list]
+        cleaned_text = [
+            self.cleaning_pipeline.process(text) for text in text_list]
+        return cleaned_text
+
+    def vectorize_batch(self, batch):
+        """
+        Vectorization routine to use during training of the model. This works
+        on batches, and benefits from the improved efficiency of computing BERT
+        embeddings in batch.
+        """
         texts = batch['texts']
         labels = batch['labels']
-        cleaned_text = [self.cleaning_pipeline.process(text) for text in texts]
-        return cleaned_text, labels
 
-    def vectorize(self, batch):
-        sentences, labels = self._prepare_batch(batch)
+        sentences = self._clean_text(texts)
+
         input_ids = tf.constant(
             self.tokenizer(
                 sentences, padding=True, truncation=True
             )['input_ids']
         )
         outputs = self.model(input_ids)
-        last_hidden_states = outputs[1]
-        # The last hidden-state is the first element of the output tuple
-        return last_hidden_states.numpy(), labels
+        return self._get_cls_state(outputs), labels
+
+    def vectorize_instance(self, text):
+        """
+        Vectorization routine for vectorizing a single instance of text. To be
+        used when serving the complete model, to predict the class of a given
+        user utterance.
+        """
+        sentence = self._clean_text(text)
+
+        input_ids = tf.constant(
+            self.tokenizer(
+                sentence, padding=True, truncation=True
+            )['input_ids']
+        )
+        outputs = self.model(input_ids)
+        return self._get_cls_state(outputs)
+
+    def _get_cls_state(self, out_tensor):
+        """
+        Helper function to get the encoding of the CLS token for the different
+        models we allow the user to select between.
+        """
+        if self.bert_model_type == 'bertweet':
+            cls_state = out_tensor[1]
+            # The last hidden-state is the first element of the output tuple
+
+        elif self.bert_model_type == 'distilbert':
+            cls_state = out_tensor[0][:,0]
+
+        elif self.bert_model_type == 'bert':
+            cls_state = out_tensor[0][:, 0, :]
+
+        return cls_state.numpy()
+
 
 if __name__ == '__main__':
      # bow = BoWVectorizer(10)
     # bow.fit(dataset)
     # print(bow.tokens_to_index)
     # print(bow.vectorize([["the", "bat", "sat", "on", "the", "hat"]]))
-    dataset = ['the cat sat on the mat']
-    bv = BERTVectorizer()
+    dataset = {'texts': ['the cat sat on the mat'],
+               'labels': [] }
+    bv = BERTVectorizer(50, bert_model_type='bert')
     print(bv.vectorize(dataset))

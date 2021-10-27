@@ -24,7 +24,8 @@ class NeuralModel:
         safe_folder_create('models')
         safe_folder_create(self.model_path)
         self.model = self.build_model()
-        self.vectorizer = BERTVectorizer(config.max_length)
+        self.vectorizer = BERTVectorizer(
+            config.max_length, config.bert_model_type)
 
     def build_model(self):
         model = tf.keras.Sequential()
@@ -82,7 +83,7 @@ class NeuralModel:
         if predict_on_text:
             batch = {'texts': inputs,
                      'labels': []}
-            inputs, _ = vectorizer.vectorize(batch)
+            inputs, _ = vectorizer.vectorize_batch(batch)
         out = model.predict(inputs)
         return out
 
@@ -146,6 +147,9 @@ def parse_args():
                         'training the model.', type=float, default=0.0001)
     parser.add_argument('--max_length', help='Maximum length of sentences in '
                         'words when tokeninizing', type=int, default=50)
+    parser.add_argument('--bert_model_type', help='Which bert model to use '
+                        'in the vectorization routine.',
+                        type=str, default='bert')
     args = parser.parse_args()
     return args
 
