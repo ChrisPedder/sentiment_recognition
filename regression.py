@@ -3,6 +3,7 @@ Model definition for regression based on the BoW model.
 
 """
 import os
+import argparse
 import numpy as np
 
 from sklearn.linear_model import SGDClassifier
@@ -10,10 +11,16 @@ from sklearn.metrics import (
     confusion_matrix, classification_report, accuracy_score, f1_score)
 from joblib import dump, load
 
-# Helper function to safely create directories
-def create_model_dir(path):
-    if not os.path.exists(path):
-        os.makedirs(path)
+from data_processing import DataIterator
+from vectorizer import BoWVectorizer, BERTVectorizer
+from regression import RegressionModel
+from utils import safe_folder_create
+
+
+VECTORIZERS = {
+    'BoW': BoWVectorizer,
+    'bert': BERTVectorizer
+}
 
 class RegressionModel:
 
@@ -28,8 +35,8 @@ class RegressionModel:
         self.dataset = dataset
         self.vectorizer = self.get_vectorizer(vectorizer)
         self.model_path = os.path.join('models', self.config.model_type)
-        create_model_dir('models')
-        create_model_dir(self.model_path)
+        safe_folder_create('models')
+        safe_folder_create(self.model_path)
 
     def get_vectorizer(self, vectorizer):
         if self.config.model_type == "BoW":
@@ -43,9 +50,8 @@ class RegressionModel:
         return vectorizer
 
     def _vectorize_batch(self, batch):
-        data_out = self.vectorizer.vectorize(batch)
-        labels_out = batch['sentiments']
-        return data_out, labels_out
+        data_out, labels = self.vectorizer.vectorize(batch)
+        return data_out, labels
 
     def train(self, _C=1.0):
         print("Creating new model")
@@ -111,3 +117,33 @@ class RegressionModel:
             "accuracy": accuracy,
             "f1_score": f1
         }
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--batch_size', help='The size of the batches to use '
+                        'when training the models', type=int,
+                        default=32)
+    parser.add_argument('--max_length', help='Maximum number of tokens to '
+                        'use when vectorizing text', type=int,
+                        default=50)
+    parser.add_argument('--model_type', help='Model type to use ',
+                        type=str, default='BoW')
+    parser.add_argument('--job', help='Whether to train or evaluate the model.',
+                        type=str, default='train')
+    args = parser.parse_args()
+    return args
+
+
+if __name__ == '__main__':
+
+    args = parse_args()
+    iterator = DataIterator
+    vectorizer = VECTORIZERS[args.model_type]
+    model = RegressionModel(args, iterator, vectorizer)
+
+    if args.job == 'train':
+        model.train()
+    elif args.job == 'evaluate':
+        results = model.evaluate()
+        print(results)

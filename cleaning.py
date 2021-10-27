@@ -13,12 +13,6 @@ Routines:
 """
 
 import re
-import nltk
-nltk.download('stopwords')
-nltk.download('wordnet')
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
 
 class DataProcessorPipeline:
 
@@ -68,16 +62,6 @@ def strip(text):
 
 def remove_stop_words(text):
     text_tokens = word_tokenize(text)
-    tokens_without_sw = [
-        word for word in text_tokens if not word in stopwords.words()]
-    return ' '.join(tokens_without_sw)
-
-def lemmatize_words(text):
-    lemmatizer = WordNetLemmatizer()
-    text_tokens = word_tokenize(text)
-    lemmatized = [
-        lemmatizer.lemmatize(word) for word in text_tokens]
-    return ' '.join(lemmatized)
 
 def split_words(text):
     return text.split(' ')
@@ -90,9 +74,6 @@ LogisticPipeline = DataProcessorPipeline([
     Processor(force_alphabet),
     Processor(remove_whitespace),
     Processor(strip),
-    # Remove the nltk stuff as v. slow
-    # Processor(remove_stop_words),
-    # Processor(lemmatize_words),
     Processor(split_words)
 ])
 
